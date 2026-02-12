@@ -1,4 +1,5 @@
 [build]
+  command = "npm install && cp payload.js netlify/functions/payload.js"
   functions = "netlify/functions"
   publish = "."
   environment = { SECRETS_SCAN_OMIT_KEYS = "EMAIL_HOST,EMAIL_PORT" }

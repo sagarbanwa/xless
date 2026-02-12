@@ -8,6 +8,7 @@ var cors = require("cors");
 const process = require("process");
 var request = require("request");
 const path = require("path");
+const fs = require("fs");
 const nodemailer = require("nodemailer");
 
 // Support local development with .env
@@ -528,7 +529,21 @@ app.all("/*", async (req, res) => {
   // Send Notifications
   await sendNotifications(alert, null, "XLess Callback Alert — " + domain);
 
-  res.sendFile(path.join(__dirname + "/payload.js"));
+  // Serve payload.js (cross-platform: Netlify, Vercel, Local)
+  // First check if payload was pre-loaded by serverless wrapper (Netlify)
+  const cachedPayload = app.get('payloadContent');
+  if (cachedPayload && cachedPayload !== '// payload not found') {
+    return res.type("application/javascript").send(cachedPayload);
+  }
+
+  // Fallback: read from filesystem (Local / Vercel)
+  try {
+    const payloadContent = fs.readFileSync(path.join(__dirname, "payload.js"), "utf8");
+    res.type("application/javascript").send(payloadContent);
+  } catch (err) {
+    console.error("Error serving payload.js:", err.message);
+    res.status(500).type("application/javascript").send("// Error: payload not found");
+  }
 });
 
 // Export the app for serverless (Netlify/Vercel)
