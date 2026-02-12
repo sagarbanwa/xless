@@ -3,4 +3,4 @@ tests/
 .vercel
 .env
 .env.example
-netlify/functions/payload.js
+netlify/functions/payload-content.js
