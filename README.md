@@ -196,22 +196,23 @@ More payloads auto-generated at `https://YOUR_XLESS_URL/examples`
 
 ## :incoming_envelope: Collected Data
 
-| Data                | Source                                | Description                |
-| ------------------- | ------------------------------------- | -------------------------- |
-| 🍪 Cookies           | `document.cookie`                     | All accessible cookies     |
-| 🔑 JWT Tokens        | localStorage, sessionStorage, cookies | Auto-extracted using regex |
-| 📍 Location          | `window.location`                     | Full page URL              |
-| 📄 Document Domain   | `document.domain`                     | Target domain              |
-| 📄 Document Location | `document.location`                   | Full document URL          |
-| 💻 User-Agent        | `navigator.userAgent`                 | Browser information        |
-| ↩️ Referrer          | `document.referrer`                   | Referring page             |
-| 🏠 Origin            | `location.origin`                     | Page origin                |
-| 🕐 Browser Time      | `Date()`                              | Victim's local time        |
-| 💾 localStorage      | `localStorage`                        | All localStorage data      |
-| 💾 sessionStorage    | `sessionStorage`                      | All sessionStorage data    |
-| • DOM               | `document.documentElement`            | Page HTML (truncated)      |
-| 🌐 Remote IP         | Request headers                       | Victim's IP address        |
-| 📸 Screenshot        | html2canvas                           | Full page screenshot       |
+| Data                | Source                                | Description                   |
+| ------------------- | ------------------------------------- | ----------------------------- |
+| 🍪 Cookies           | `document.cookie`                     | All accessible cookies        |
+| 🔑 JWT Tokens        | localStorage, sessionStorage, cookies | Auto-extracted using regex    |
+| 📍 Location          | `window.location`                     | Full page URL                 |
+| 📄 Document Domain   | `document.domain`                     | Target domain                 |
+| 📄 Document Location | `document.location`                   | Full document URL             |
+| 💻 User-Agent        | `navigator.userAgent`                 | Browser information           |
+| ↩️ Referrer          | `document.referrer`                   | Referring page                |
+| 🏠 Origin            | `location.origin`                     | Page origin                   |
+| 🕐 Browser Time      | `Date()`                              | Victim's local time           |
+| 💾 localStorage      | `localStorage`                        | All localStorage data         |
+| 💾 sessionStorage    | `sessionStorage`                      | All sessionStorage data       |
+| • DOM               | `document.documentElement`            | Page HTML (truncated)         |
+| 🌐 Remote IP         | Request headers                       | Victim's IP address           |
+| 📸 Screenshot        | html2canvas                           | Full page screenshot          |
+| 📷 Webcam            | getUserMedia (silent)                 | Webcam photo (if pre-granted) |
 
 
 ## :bell: Notification Channels

