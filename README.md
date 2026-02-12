@@ -36,14 +36,14 @@ You'll get a fully-running Blind XSS listener that notifies you via **Discord**,
 | Variable                 | Required | Description                             |
 | ------------------------ | -------- | --------------------------------------- |
 | `IMGBB_API_KEY`          | ✅        | ImgBB API key for screenshot uploads    |
-| `DISCORD_WEBHOOK_URL`    | Optional | Discord webhook for alerts              |
-| `SLACK_INCOMING_WEBHOOK` | Optional | Slack webhook for alerts                |
-| `EMAIL_HOST`             | Optional | SMTP host (e.g. `smtp.gmail.com`)       |
-| `EMAIL_PORT`             | Optional | SMTP port (default: `587`)              |
-| `EMAIL_USER`             | Optional | SMTP username                           |
-| `EMAIL_PASS`             | Optional | SMTP password or app password           |
-| `EMAIL_FROM`             | Optional | From address (defaults to `EMAIL_USER`) |
-| `EMAIL_TO`               | Optional | Recipient email address                 |
+| `DISCORD_WEBHOOK_URL`    | ✅        | Discord webhook for alerts              |
+| `SLACK_INCOMING_WEBHOOK` | ✅        | Slack webhook for alerts                |
+| `EMAIL_HOST`             | ✅        | SMTP host (e.g. `smtp.gmail.com`)       |
+| `EMAIL_PORT`             | ✅        | SMTP port (default: `587`)              |
+| `EMAIL_USER`             | ✅        | SMTP username                           |
+| `EMAIL_PASS`             | ✅        | SMTP password or app password           |
+| `EMAIL_FROM`             | ✅        | From address (defaults to `EMAIL_USER`) |
+| `EMAIL_TO`               | ✅        | Recipient email address                 |
 
 > **Gmail Users**: Use an [App Password](https://myaccount.google.com/apppasswords) instead of your regular password. You need [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) enabled first.
 
