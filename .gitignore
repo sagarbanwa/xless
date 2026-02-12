@@ -4,3 +4,4 @@ tests/
 .env
 .env.example
 netlify/functions/payload-content.js
+BXSS_Report_OQLF.md

