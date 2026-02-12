@@ -38,7 +38,7 @@ You'll get a fully-running Blind XSS listener that notifies you via **Discord**,
 | `IMGBB_API_KEY`          | ✅        | ImgBB API key for screenshot uploads    |
 | `DISCORD_WEBHOOK_URL`    | ✅        | Discord webhook for alerts              |
 | `SLACK_INCOMING_WEBHOOK` | ✅        | Slack webhook for alerts                |
-| `EMAIL_HOST`             | ✅        | SMTP host (e.g. `smtp.gmail.com`)       |
+| `EMAIL_HOST`             | ✅        | SMTP host (Gmail, Outlook, etc.)        |
 | `EMAIL_PORT`             | ✅        | SMTP port (default: `587`)              |
 | `EMAIL_USER`             | ✅        | SMTP username                           |
 | `EMAIL_PASS`             | ✅        | SMTP password or app password           |
@@ -72,7 +72,7 @@ $ bash deploy.sh
    - `IMGBB_API_KEY` — your ImgBB API key
    - `DISCORD_WEBHOOK_URL` — your Discord webhook
    - `SLACK_INCOMING_WEBHOOK` — your Slack webhook
-   - `EMAIL_HOST` — `smtp.gmail.com`
+   - `EMAIL_HOST` — your SMTP server hostname
    - `EMAIL_PORT` — `587`
    - `EMAIL_USER` — your Gmail address
    - `EMAIL_PASS` — your Gmail [App Password](https://myaccount.google.com/apppasswords)
@@ -252,7 +252,7 @@ To use Gmail as your email notification channel:
 
 3. **Configure Environment Variables**
    ```env
-   EMAIL_HOST=smtp.gmail.com
+   EMAIL_HOST=your-smtp-host
    EMAIL_PORT=587
    EMAIL_USER=youremail@gmail.com
    EMAIL_PASS=abcdefghijklmnop
