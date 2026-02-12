@@ -13,25 +13,33 @@ if [ "$platform" == "1" ]; then
     echo "Deploying to Vercel..."
     echo ""
     
-    read -p "Enter Xless project name: " "project_name"
-    vercel project add "$project_name"
+    # Link project first (this creates and connects the project)
+    echo "Step 1: Linking project to Vercel..."
+    vercel link
+    
+    echo ""
+    echo "Step 2: Adding environment variables..."
+    echo "(Press Enter to skip any you don't want to set)"
+    echo ""
 
     # Required
-    vercel env add IMGBB_API_KEY
+    vercel env add IMGBB_API_KEY production
 
-    # Notification channels (at least one required)
-    vercel env add SLACK_INCOMING_WEBHOOK
-    vercel env add DISCORD_WEBHOOK_URL
+    # Notification channels
+    vercel env add DISCORD_WEBHOOK_URL production
+    vercel env add SLACK_INCOMING_WEBHOOK production
 
-    # Email fallback (optional)
-    vercel env add EMAIL_HOST
-    vercel env add EMAIL_PORT
-    vercel env add EMAIL_USER
-    vercel env add EMAIL_PASS
-    vercel env add EMAIL_FROM
-    vercel env add EMAIL_TO
+    # Email config
+    vercel env add EMAIL_HOST production
+    vercel env add EMAIL_PORT production
+    vercel env add EMAIL_USER production
+    vercel env add EMAIL_PASS production
+    vercel env add EMAIL_FROM production
+    vercel env add EMAIL_TO production
 
-    vercel deploy
+    echo ""
+    echo "Step 3: Deploying..."
+    vercel deploy --prod
 
 elif [ "$platform" == "2" ]; then
     echo ""
