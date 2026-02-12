@@ -1,3 +1,5 @@
 node_modules
 tests/
 .vercel
+.env
+.env.example

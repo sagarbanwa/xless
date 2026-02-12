@@ -21,7 +21,10 @@ That's it. You now have a fully-running Blind XSS listener that uses Slack to no
 
 ## :warning: Requirements
 * [vercel.com](https://vercel.com/) account: Vercel provides a **free plan** for serverless. If you use another provider for serverless, code changes should be minimal.
-* Slack Incoming Webhook URL.
+* **At least one notification channel**:
+  * Slack Incoming Webhook URL (recommended)
+  * Discord Webhook URL (recommended)
+  * Email SMTP credentials (fallback)
 * IMGBB (free) Account and API key - for the screenshots.
 
 
@@ -54,10 +57,12 @@ $ bash deploy.sh
 ## :incoming_envelope: Collected Data
 
 * Cookies
+* JWT Tokens (auto-extracted from localStorage, sessionStorage, and cookies)
 * User-Agent
 * HTTP Referrer
 * Browser DOM
 * Browser Time
+* Document Domain
 * Document Location
 * Origin
 * LocalStorage
@@ -141,3 +146,10 @@ The project is currently licensed under MIT License.
 * Email: mazin [at] mazinahmed [dot] net
 * Twitter: [https://twitter.com/mazen160](https://twitter.com/mazen160)
 * Linkedin: [http://linkedin.com/in/infosecmazinahmed](http://linkedin.com/in/infosecmazinahmed)
+
+## Gmail setup for email fallback
+Go to *https://myaccount.google.com/security*.
+Enable 2-Step Verification (if not already enabled)
+Go to App passwords
+Generate a new app password for "Mail" → "Other (Xless)"
+Copy the 16-character password and use it as EMAIL_PASS

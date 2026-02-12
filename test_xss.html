@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xless Full Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .info { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .status { color: #4ade80; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Xless Full Feature Test Page</h1>
+        
+        <div class="info">
+            <h3>Test Scenario:</h3>
+            <p>This page simulates a real application with:</p>
+            <ul>
+                <li>✅ Cookies (session, user data)</li>
+                <li>✅ JWT Tokens in localStorage</li>
+                <li>✅ JWT Tokens in sessionStorage</li>
+                <li>✅ Sensitive data in DOM</li>
+                <li>✅ Visual content for screenshot</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h3>User Session:</h3>
+            <p><strong>Username:</strong> admin@example.com</p>
+            <p><strong>Role:</strong> Administrator</p>
+            <p><strong>Session ID:</strong> abc123xyz789</p>
+            <p class="status">Status: Authenticated ✓</p>
+        </div>
+
+        <div class="info">
+            <h3>API Keys (Hidden):</h3>
+            <p style="display:none;">SECRET_API_KEY=sk_live_51234567890abcdef</p>
+            <p style="display:none;">AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE</p>
+        </div>
+    </div>
+
+    <script>
+        // Set cookies
+        document.cookie = "session_id=abc123xyz789; path=/";
+        document.cookie = "user_email=admin@example.com; path=/";
+        document.cookie = "auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkFkbWluIFVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c; path=/";
+        document.cookie = "preferences={\"theme\":\"dark\",\"lang\":\"en\"}; path=/";
+
+        // Set JWT in localStorage
+        localStorage.setItem('access_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDUiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzA4NjE1MjAwLCJleHAiOjE3MDg3MDE2MDB9.dGVzdF9zaWduYXR1cmVfaGVyZQ');
+        localStorage.setItem('refresh_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDUiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTcwODYxNTIwMCwiZXhwIjoxNzExMjA3MjAwfQ.cmVmcmVzaF9zaWduYXR1cmU');
+        localStorage.setItem('user_data', '{"id":"12345","name":"Admin User","email":"admin@example.com"}');
+
+        // Set JWT in sessionStorage
+        sessionStorage.setItem('api_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiYWJjZGVmMTIzNDU2Iiwic2NvcGUiOiJmdWxsX2FjY2VzcyIsImlhdCI6MTcwODYxNTIwMH0.YXBpX3Rva2VuX3NpZ25hdHVyZQ');
+        sessionStorage.setItem('temp_session', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uX2lkIjoiYWJjMTIzeHl6Nzg5IiwidGltZXN0YW1wIjoxNzA4NjE1MjAwfQ.c2Vzc2lvbl90b2tlbg');
+
+        console.log('✅ Test data initialized');
+        console.log('Cookies:', document.cookie);
+        console.log('localStorage:', localStorage);
+        console.log('sessionStorage:', sessionStorage);
+    </script>
+
+    <!-- XSS Payload Injection Point -->
+    <script src="http://localhost:3000"></script>
+</body>
+</html>
