@@ -45,30 +45,37 @@ elif [ "$platform" == "2" ]; then
     echo ""
     echo "Deploying to Netlify..."
     echo ""
-    echo "Make sure you have Netlify CLI installed: npm install -g netlify-cli"
-    echo ""
     
-    # Deploy to Netlify
+    # Check if Netlify CLI is installed
+    if ! command -v netlify &> /dev/null; then
+        echo "Netlify CLI not found. Installing..."
+        npm install -g netlify-cli
+    fi
+
+    # Step 1: Link site
+    echo "Step 1: Linking site to Netlify..."
+    netlify link
+    
+    # Step 2: Set env vars
+    echo ""
+    echo "Step 2: Setting environment variables..."
+    echo "(Leave blank and press Enter to skip any)"
+    echo ""
+
+    read -p "IMGBB_API_KEY: " val && [ -n "$val" ] && netlify env:set IMGBB_API_KEY "$val"
+    read -p "DISCORD_WEBHOOK_URL: " val && [ -n "$val" ] && netlify env:set DISCORD_WEBHOOK_URL "$val"
+    read -p "SLACK_INCOMING_WEBHOOK: " val && [ -n "$val" ] && netlify env:set SLACK_INCOMING_WEBHOOK "$val"
+    read -p "EMAIL_HOST: " val && [ -n "$val" ] && netlify env:set EMAIL_HOST "$val"
+    read -p "EMAIL_PORT [587]: " val; val=${val:-587} && netlify env:set EMAIL_PORT "$val"
+    read -p "EMAIL_USER: " val && [ -n "$val" ] && netlify env:set EMAIL_USER "$val"
+    read -p "EMAIL_PASS: " val && [ -n "$val" ] && netlify env:set EMAIL_PASS "$val"
+    read -p "EMAIL_FROM: " val && [ -n "$val" ] && netlify env:set EMAIL_FROM "$val"
+    read -p "EMAIL_TO: " val && [ -n "$val" ] && netlify env:set EMAIL_TO "$val"
+    
+    # Step 3: Deploy
+    echo ""
+    echo "Step 3: Deploying to production..."
     netlify deploy --prod
-    
-    echo ""
-    echo "Now set environment variables in Netlify dashboard:"
-    echo "https://app.netlify.com/ -> Your Site -> Site settings -> Environment variables"
-    echo ""
-    echo "Required variables:"
-    echo "  - IMGBB_API_KEY"
-    echo ""
-    echo "Notification channels (at least one):"
-    echo "  - SLACK_INCOMING_WEBHOOK"
-    echo "  - DISCORD_WEBHOOK_URL"
-    echo ""
-    echo "Email (configure your SMTP):"
-    echo "  - EMAIL_HOST (e.g. Gmail, Outlook, etc.)"
-    echo "  - EMAIL_PORT (e.g. 587)"
-    echo "  - EMAIL_USER"
-    echo "  - EMAIL_PASS"
-    echo "  - EMAIL_FROM"
-    echo "  - EMAIL_TO"
     
 else
     echo "Invalid choice. Exiting."
