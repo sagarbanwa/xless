@@ -45,7 +45,7 @@
     function captureFullPage() {
       return html2canvas(document.documentElement, {
         letterRendering: 1,
-        allowTaint: true,
+        allowTaint: false,
         useCORS: true,
         width: Math.min(docW, 4096),
         height: Math.min(docH, 4096),
@@ -68,7 +68,7 @@
       var scrollY = window.pageYOffset || document.documentElement.scrollTop;
       return html2canvas(document.documentElement, {
         letterRendering: 1,
-        allowTaint: true,
+        allowTaint: false,
         useCORS: true,
         width: vpW,
         height: vpH,
@@ -91,7 +91,7 @@
       var belowY = Math.min(vpH, docH - vpH);
       return html2canvas(document.documentElement, {
         letterRendering: 1,
-        allowTaint: true,
+        allowTaint: false,
         useCORS: true,
         width: Math.min(docW, 4096),
         height: vpH,
