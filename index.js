@@ -87,6 +87,11 @@ function generate_blind_xss_alert(body) {
     } else {
       let value = body[k];
 
+      // Truncate long fields (like DOM) to prevent massive spam
+      if (value.length > 800) {
+        value = value.substring(0, 800) + "\n... [TRUNCATED] ...";
+      }
+
       alert += `${emoji} **${k}:**\n\`\`\`\n${value}\n\`\`\`\n`;
     }
   }
@@ -253,6 +258,7 @@ function sendDiscordAlert(message, screenshotUrls, webcamUrl) {
         content: label,
         embeds: [{
           title: "📸 " + (titles[index] || "Screenshot " + (index + 1)),
+          description: `[Click here if image doesn't load](${screenshotUrls[index]})`,
           color: 0xff0000,
           image: { url: screenshotUrls[index] },
           footer: { text: "Xless Blind XSS Detection" },
@@ -322,6 +328,13 @@ function sendSlackAlert(message, screenshotUrls, webcamUrl) {
     var ssLabels = ["Full Page", "Viewport", "Below Fold"];
     screenshotUrls.forEach(function (url, idx) {
       if (url && url !== "NA" && url !== "") {
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "*Screenshot " + (idx + 1) + "*: <" + url + "|Click to view>"
+          }
+        });
         blocks.push({
           type: "image",
           title: {
