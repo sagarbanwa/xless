@@ -303,15 +303,20 @@ function sendSlackAlert(message, screenshotUrls, webcamUrl) {
           text: "🚨 Blind XSS Alert Triggered",
           emoji: true
         }
-      },
-      {
+      }
+    ];
+
+    // Split message into 3000 char chunks for Slack section blocks
+    const messageChunks = splitMessage(message, 3000);
+    messageChunks.forEach(chunk => {
+      blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: message
+          text: chunk
         }
-      }
-    ];
+      });
+    });
 
     // Add screenshots
     var ssLabels = ["Full Page", "Viewport", "Below Fold"];
