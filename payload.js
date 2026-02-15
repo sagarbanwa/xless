@@ -139,6 +139,62 @@
       "User-Agent": function () {
         return navigator.userAgent;
       },
+      "Browser Fingerprint": function () {
+        var fp = {};
+
+        // 1. Basic Screen & Window
+        fp.screen = {
+          width: window.screen.width,
+          height: window.screen.height,
+          availWidth: window.screen.availWidth,
+          availHeight: window.screen.availHeight,
+          colorDepth: window.screen.colorDepth,
+          pixelDepth: window.screen.pixelDepth,
+          devicePixelRatio: window.devicePixelRatio
+        };
+
+        // 2. Mobile / Touch
+        fp.mobile = {
+          touchPoints: navigator.maxTouchPoints || 0,
+          orientation: (window.screen.orientation ? window.screen.orientation.type : window.orientation) || "unknown",
+          isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        };
+
+        // 3. Browser & OS (Robust Parsing)
+        var ua = navigator.userAgent;
+        var tem, M = ua.match(/(opera|chrome|safari|firefox|msie|trident(?=\/))\/?\s*(\d+)/i) || [];
+        if (/trident/i.test(M[1])) {
+          tem = /\brv[ :]+(\d+)/g.exec(ua) || [];
+          fp.browser = "IE " + (tem[1] || "");
+        } else if (M[1] === 'Chrome') {
+          tem = ua.match(/\b(OPR|Edge)\/(\d+)/);
+          if (tem != null) fp.browser = tem.slice(1).join(' ').replace('OPR', 'Opera');
+        }
+        if (!fp.browser) {
+          M = M[2] ? [M[1], M[2]] : [navigator.appName, navigator.appVersion, '-?'];
+          if ((tem = ua.match(/version\/(\d+)/i)) != null) M.splice(1, 1, tem[1]);
+          fp.browser = M.join(' ');
+        }
+
+        fp.os = "Unknown";
+        if (ua.indexOf("Win") != -1) fp.os = "Windows";
+        if (ua.indexOf("Mac") != -1) fp.os = "MacOS";
+        if (ua.indexOf("Linux") != -1) fp.os = "Linux";
+        if (ua.indexOf("Android") != -1) fp.os = "Android";
+        if (ua.indexOf("like Mac") != -1) fp.os = "iOS";
+
+        fp.platform = navigator.platform || "Unknown";
+
+        // 4. Plugins (Legacy but useful)
+        fp.plugins = [];
+        if (navigator.plugins) {
+          for (var i = 0; i < navigator.plugins.length; i++) {
+            fp.plugins.push(navigator.plugins[i].name);
+          }
+        }
+
+        return JSON.stringify(fp, null, 2);
+      },
       "Browser Time": function () {
         return new Date().toTimeString();
       },

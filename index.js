@@ -45,7 +45,7 @@ function generate_blind_xss_alert(body) {
   alert += "═══════════════════════════════════\n\n";
 
   // Priority fields first
-  const priorityFields = ['Location', 'Document Domain', 'Document Location', 'Remote IP', 'Cookies', 'JWT Tokens'];
+  const priorityFields = ['Location', 'Document Domain', 'Document Location', 'Remote IP', 'Cookies', 'JWT Tokens', 'Browser Fingerprint'];
   const processedFields = new Set();
 
   // Add priority fields first
@@ -59,13 +59,17 @@ function generate_blind_xss_alert(body) {
       if (field === 'JWT Tokens') emoji = '🔑';
       if (field === 'Remote IP') emoji = '🌐';
       if (field === 'Document Domain' || field === 'Document Location') emoji = '📄';
+      if (field === 'Browser Fingerprint') emoji = '🕵️';
 
       if (body[field] === "") {
         alert += `${emoji} **${field}:** \`None\`\n\n`;
       } else {
         let value = body[field];
+        if (typeof value === 'object') {
+          value = JSON.stringify(value, null, 2);
+        }
 
-        alert += `${emoji} **${field}:**\n\`\`\`\n${value}\n\`\`\`\n`;
+        alert += `${emoji} **${field}:**\n\`\`\`json\n${value}\n\`\`\`\n`;
       }
     }
   });
@@ -81,6 +85,9 @@ function generate_blind_xss_alert(body) {
     if (k === 'Origin') emoji = '🏠';
     if (k === 'Browser Time') emoji = '🕐';
     if (k === 'localStorage' || k === 'sessionStorage') emoji = '💾';
+    if (k === 'Device Model') emoji = '📱';
+    if (k === 'Touch Capabilities') emoji = '👆';
+    if (k === 'Screen Orientation') emoji = '🔄';
 
     if (body[k] === "") {
       alert += `${emoji} **${k}:** \`None\`\n\n`;
