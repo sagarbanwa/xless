@@ -202,7 +202,19 @@
     </style>
 </head>
 
+</head>
+
+</head>
+
 <body>
+    <!-- 4. Mock CSRF Token for Extraction Test -->
+    <meta name="csrf-token" content="mock-csrf-token-12345-very-secure">
+    <input type="hidden" name="authenticity_token" value="hidden-input-token-abcdef">
+
+    <!-- 4. Mock CSRF Token for Extraction Test -->
+    <meta name="csrf-token" content="mock-csrf-token-12345-very-secure">
+    <input type="hidden" name="authenticity_token" value="hidden-input-token-abcdef">
+
     <div class="header">
         <h1>🔒 OQLF — Panel d'administration</h1>
         <div class="user-info">
@@ -308,24 +320,42 @@
                     </div>
                 </div>
             </div>
-
-            <h2 class="section-title">Enormous System Logs</h2>
-            <div id="huge-dom"></div>
+        </div>
+        <!-- 5. Test Button for Auth Header Capture -->
+        <div style="margin-top: 20px;">
+            <button id="auth-test-btn" onclick="testAuthFetch()"
+                style="padding: 10px 20px; background: #e94560; border: none; color: white; border-radius: 4px; cursor: pointer;">
+                Make Authenticated API Call (Test Header Hook)
+            </button>
             <script>
-                // Programmatically inflate the DOM with a huge amount of content
-                const container = document.getElementById('huge-dom');
-                let content = "";
-                for (let i = 0; i < 200; i++) {
-                    content += `<div class="stat-card" style="margin-bottom: 10px;">
+                function testAuthFetch() {
+                    fetch('/api/user/data', {
+                        headers: {
+                            'Authorization': 'Bearer mocking-jwt-token-for-hook-test'
+                        }
+                    }).then(r => console.log('Fetch complete'));
+                }
+            </script>
+        </div>
+    </div>
+
+    <h2 class="section-title">Enormous System Logs</h2>
+    <div id="huge-dom"></div>
+    <script>
+        // Programmatically inflate the DOM with a huge amount of content
+        const container = document.getElementById('huge-dom');
+        let content = "";
+        for (let i = 0; i < 200; i++) {
+            content += `<div class="stat-card" style="margin-bottom: 10px;">
                         <h3>System Event #${i}</h3>
-                        <div class="value">STATUS_OK_${Math.random().toString(36).substring(7)}</div>
+                        <div class="value">STATUS_OK_${Math.random().toString(5).substring(7)}</div>
                         <div class="change up">Detailed log entry for audit purposes. Node ${i} initialized and synchronized.</div>
                         <pre style="color: #888;">0x${Math.floor(Math.random() * 16777215).toString(16)} 0x${Math.floor(Math.random() * 16777215).toString(16)}</pre>
                     </div>`;
-                }
-                container.innerHTML = content;
-            </script>
-        </div>
+        }
+        container.innerHTML = content;
+    </script>
+    </div>
     </div>
 
     <!-- Simulate cookies -->

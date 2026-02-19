@@ -1,6 +1,5 @@
 // Xless: The Serverlesss Blind XSS App.
-// Version: v1.3
-// Author: Mazin Ahmed <mazin@mazinahmed.net>
+// Version: v2.0
 
 const express = require("express");
 var bodyParser = require("body-parser");
@@ -96,7 +95,7 @@ function generate_blind_xss_alert(body) {
 
       // Truncate long fields (like DOM) to prevent massive spam
       if (value.length > 800) {
-        value = value.substring(0, 800) + "\n... [TRUNCATED] ...";
+        value = value.substring(0, 900) + "\n... [TRUNCATED] ...";
       }
 
       alert += `${emoji} **${k}:**\n\`\`\`\n${value}\n\`\`\`\n`;
@@ -521,6 +520,13 @@ app.all("/message", async (req, res) => {
 
   res.send("ok\n");
   res.end();
+});
+
+// Mock Admin Endpoint for Session Riding Demo
+app.post("/api/admin/create_user", (req, res) => {
+  console.log("🚨 [CRITICAL] ADMIN ACTION PERFORMED via Session Riding!");
+  console.log("   Data:", req.body);
+  res.json({ success: true, message: "User created successfully (Mock)" });
 });
 
 app.post("/c", async (req, res) => {

